@@ -2,12 +2,13 @@
 
 ## 使用指南
 1. **仓库浏览**：直接阅读本 `README.md`，获取完整文档；
-2. **网页访问**：通过 Pingyamo lingvo链接](https://Pingyamo lingvo.com) 
-3. **文件下载**：点击文件右上角“Raw”，右键“另存为”可下载本地使用。
+2. **网页访问**：通过 Pingyamo lingvo链接](https://PingyamoYiye.com)
+   
+4. **文件下载**：点击文件右上角“Raw”，右键“另存为”可下载本地使用。
 
 
 ## 一、基础设计：拼音、词汇与语法
-### 1. 拼音方案（Pingyamo lingvo）
+### 1. 拼音方案（Pingyamo ）
 #### （1）元音（5个）
 发音固定，无长短/声调差异，具体如下：
 
