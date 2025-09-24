@@ -1,10 +1,4 @@
-# Pingyamo lingvo （拼音语）设计方案完整版（含场景化应用）
-
-## 使用指南
-1. **仓库浏览**：直接阅读本 `README.md`，获取完整文档；
-2. **网页访问**：通过 Pingyamo lingvo链接](https://PingyamoYiye.com)
-   
-4. **文件下载**：点击文件右上角“Raw”，右键“另存为”可下载本地使用。
+# Pingyamo lingvo 拼音语
 
 
 ## 一、基础设计：拼音、词汇与语法
