@@ -1,0 +1,201 @@
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_mail import Mail, Message
+from flask_talisman import Talisman
+from werkzeug.security import generate_password_hash, check_password_hash
+import redis
+import os
+from datetime import datetime, timedelta
+from uuid import uuid4
+from wtforms import Form, StringField, PasswordField, validators
+
+# 初始化应用和配置
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your_secret_key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
+app.config['MAIL_SERVER'] = 'smtp.example.com'
+app.config['MAIL_PORT'] = 465
+app.config['MAIL_USE_SSL'] = True
+app.config['MAIL_USERNAME'] = 'your_email@example.com'
+app.config['MAIL_PASSWORD'] = 'your_password'
+app.config['RECAPTCHA_PUBLIC_KEY'] = 'your_recaptcha_public_key'
+app.config['RECAPTCHA_PRIVATE_KEY'] = 'your_recaptcha_private_key'
+
+# 初始化扩展
+db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+mail = Mail(app)
+talisman = Talisman(app, content_security_policy=None)
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
+
+# 数据库模型
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(20), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    phone = db.Column(db.String(20), unique=True, nullable=False)
+    birthday = db.Column(db.Date, nullable=False)
+    password = db.Column(db.String(60), nullable=False)
+    posts = db.relationship('Post', backref='author', lazy=True)
+    votes = db.relationship('Vote', backref='voter', lazy=True)
+
+class Post(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(100), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    date_posted = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+class Vote(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(100), nullable=False)
+    options = db.Column(db.String(200), nullable=False)
+    votes = db.Column(db.String(200), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+# 表单验证
+class RegistrationForm(Form):
+    username = StringField('Username', [validators.Length(min=4, max=20)])
+    email = StringField('Email', [validators.Email()])
+    phone = StringField('Phone', [validators.Length(min=10, max=20)])
+    birthday = StringField('Birthday', [validators.Length(min=8, max=10)])
+    password = PasswordField('Password', [validators.Length(min=6)])
+    confirm = PasswordField('Confirm Password', [validators.EqualTo('password')])
+
+class LoginForm(Form):
+    email = StringField('Email', [validators.Email()])
+    password = PasswordField('Password', [validators.Length(min=6)])
+
+class PostForm(Form):
+    title = StringField('Title', [validators.Length(min=1, max=100)])
+    content = StringField('Content', [validators.Length(min=1)])
+
+class VoteForm(Form):
+    title = StringField('Title', [validators.Length(min=1, max=100)])
+    options = StringField('Options', [validators.Length(min=1)])
+
+# 路由
+@app.route('/')
+def home():
+    posts = Post.query.all()
+    votes = Vote.query.all()
+    return render_template('home.html', posts=posts, votes=votes)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    form = RegistrationForm(request.form)
+    if request.method == 'POST' and form.validate():
+        hashed_password = generate_password_hash(form.password.data, method='pbkdf2:sha256', salt_length=16)
+        user = User(username=form.username.data, email=form.email.data, phone=form.phone.data, birthday=datetime.strptime(form.birthday.data, '%Y-%m-%d'), password=hashed_password)
+        db.session.add(user)
+        db.session.commit()
+        flash('Account created successfully!', 'success')
+        return redirect(url_for('login'))
+    return render_template('register.html', form=form)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    form = LoginForm(request.form)
+    if request.method == 'POST' and form.validate():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user and check_password_hash(user.password, form.password.data):
+            login_user(user)
+            flash('Login successful!', 'success')
+            return redirect(url_for('home'))
+        else:
+            flash('Login unsuccessful. Please check email and password.', 'danger')
+    return render_template('login.html', form=form)
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('home'))
+
+@app.route('/post/new', methods=['GET', 'POST'])
+@login_required
+def new_post():
+    form = PostForm(request.form)
+    if request.method == 'POST' and form.validate():
+        post = Post(title=form.title.data, content=form.content.data, author=current_user)
+        db.session.add(post)
+        db.session.commit()
+        flash('Your post has been created!', 'success')
+        return redirect(url_for('home'))
+    return render_template('create_post.html', form=form)
+
+@app.route('/vote/new', methods=['GET', 'POST'])
+@login_required
+def new_vote():
+    form = VoteForm(request.form)
+    if request.method == 'POST' and form.validate():
+        vote = Vote(title=form.title.data, options=form.options.data, votes='', voter=current_user)
+        db.session.add(vote)
+        db.session.commit()
+        flash('Your vote has been created!', 'success')
+        return redirect(url_for('home'))
+    return render_template('create_vote.html', form=form)
+
+@app.route('/vote/<int:vote_id>', methods=['GET', 'POST'])
+@login_required
+def vote(vote_id):
+    vote = Vote.query.get_or_404(vote_id)
+    if request.method == 'POST':
+        selected_option = request.form['option']
+        if vote.votes:
+            votes = vote.votes.split(',')
+            if current_user.id not in votes:
+                votes.append(current_user.id)
+                vote.votes = ','.join(votes)
+        else:
+            vote.votes = str(current_user.id)
+        db.session.commit()
+        flash('Your vote has been recorded!', 'success')
+        return redirect(url_for('home'))
+    return render_template('vote.html', vote=vote)
+
+@app.route('/profile')
+@login_required
+def profile():
+    return render_template('profile.html')
+
+@app.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
+
+# 验证码相关函数
+def generate_captcha():
+    captcha = str(uuid4()).replace('-', '')[:6]
+    redis_client.setex(f'captcha:{captcha}', 300, captcha)
+    return captcha
+
+def verify_captcha(captcha):
+    if redis_client.exists(f'captcha:{captcha}'):
+        redis_client.delete(f'captcha:{captcha}')
+        return True
+    return False
+
+# 邮件相关函数
+def send_reset_email(user):
+    token = user.get_reset_token()
+    msg = Message('Password Reset Request', sender='noreply@demo.com', recipients=[user.email])
+    msg.body = f'''To reset your password, visit the following link:
+{url_for('reset_token', token=token, _external=True)}
+If you did not make this request then simply ignore this email and no changes will be made.
+'''
+    mail.send(msg)
+
+# 错误处理
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('404.html'), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    return render_template('500.html'), 500
+
+# 启动应用
+if __name__ == '__main__':
+    app.run(debug=True)
