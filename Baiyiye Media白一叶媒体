@@ -1,0 +1,318 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { BrowserRouter as Router, Route, Switch, Link } from 'react-router-dom';
+
+function Register() {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = async () => {
+    try {
+      await axios.post('http://localhost:3000/api/register', { username, password });
+      alert('注册成功！');
+    } catch (error) {
+      alert('注册失败: ' + error.message);
+    }
+  };
+
+  return (
+    <div>
+      <h2>注册</h2>
+      <input
+        type="text"
+        placeholder="用户名"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+      />
+      <input
+        type="password"
+        placeholder="密码"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <button onClick={handleSubmit}>提交</button>
+    </div>
+  );
+}
+
+function Login() {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = async () => {
+    try {
+      await axios.post('http://localhost:3000/api/login', { username, password });
+      alert('登录成功！');
+    } catch (error) {
+      alert('登录失败: ' + error.message);
+    }
+  };
+
+  return (
+    <div>
+      <h2>登录</h2>
+      <input
+        type="text"
+        placeholder="用户名"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+      />
+      <input
+        type="password"
+        placeholder="密码"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <button onClick={handleSubmit}>提交</button>
+    </div>
+  );
+}
+
+function Home() {
+  const [content, setContent] = useState('');
+  const [media, setMedia] = useState('');
+  const [posts, setPosts] = useState([]);
+
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const response = await axios.get('http://localhost:3000/api/posts');
+        setPosts(response.data.posts);
+      } catch (error) {
+        console.error('获取帖子失败:', error);
+      }
+    };
+    fetchPosts();
+  }, []);
+
+  const handleSubmit = async () => {
+    try {
+      await axios.post('http://localhost:3000/api/posts', { content, media: media.split(',') });
+      alert('发布成功！');
+    } catch (error) {
+      alert('发布失败: ' + error.message);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await axios.delete(`http://localhost:3000/api/posts/${id}`);
+      setPosts(posts.filter((post) => post._id !== id));
+    } catch (error) {
+      alert('删除失败: ' + error.message);
+    }
+  };
+
+  return (
+    <div>
+      <h2>首页</h2>
+      <div>
+        <textarea
+          placeholder="发布内容"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+        />
+        <input
+          type="text"
+          placeholder="媒体链接，逗号分隔"
+          value={media}
+          onChange={(e) => setMedia(e.target.value)}
+        />
+        <button onClick={handleSubmit}>发布</button>
+      </div>
+      <div>
+        {posts.map((post) => (
+          <div key={post._id}>
+            <h3>{post.userId.username}</h3>
+            <p>{post.content}</p>
+            <div>
+              {post.media.map((item) => (
+                <img src={item} alt="post-image" key={item} style={{ width: '100px', height: 'auto' }} />
+              ))}
+            </div>
+            <button onClick={() => handleDelete(post._id)}>删除</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Encrypt() {
+  const [message, setMessage] = useState('');
+  const [key, setKey] = useState('');
+  const [encrypted, setEncrypted] = useState('');
+
+  const handleSubmit = async () => {
+    try {
+      const response = await axios.post('http://localhost:3000/api/encrypt', { message, key });
+      setEncrypted(response.data.encrypted);
+    } catch (error) {
+      alert('加密失败: ' + error.message);
+    }
+  };
+
+  return (
+    <div>
+      <h2>加密消息</h2>
+      <input
+        type="text"
+        placeholder="消息"
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="密钥"
+        value={key}
+        onChange={(e) => setKey(e.target.value)}
+      />
+      <button onClick={handleSubmit}>加密</button>
+      {encrypted && <div>加密结果: {encrypted}</div>}
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <nav>
+        <Link to="/">首页</Link>
+        <Link to="/register">注册</Link>
+        <Link to="/login">登录</Link>
+        <Link to="/encrypt">加密消息</Link>
+      </nav>
+      <Switch>
+        <Route path="/" exact component={Home} />
+        <Route path="/register" component={Register} />
+        <Route path="/login" component={Login} />
+        <Route path="/encrypt" component={Encrypt} />
+      </Switch>
+    </Router>
+  );
+}
+
+export default App;
+const express = require('express');
+const bcrypt = require('bcrypt');
+const mongoose = require('mongoose');
+const session = require('express-session');
+const crypto = require('crypto-js');
+
+const app = express();
+
+mongoose.connect('mongodb://localhost:27017/mediaplatform', { useNewUrlParser: true, useUnifiedTopology: true }, () => {
+  console.log('Connected to MongoDB');
+});
+
+const UserSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true }
+});
+
+const PostSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'User' },
+  content: { type: String, required: true },
+  media: [{ type: String }],
+  date: { type: Date, default: Date.now }
+});
+
+const User = mongoose.model('User', UserSchema);
+const Post = mongoose.model('Post', PostSchema);
+
+app.use(session({
+  secret: 'secret-key',
+  resave: false,
+  saveUninitialized: false
+}));
+
+app.use(express.json());
+
+app.post('/api/register', async (req, res) => {
+  const { username, password } = req.body;
+  const salt = bcrypt.genSaltSync(10);
+  const hashedPassword = bcrypt.hashSync(password, salt);
+
+  try {
+    const user = new User({ username, password: hashedPassword });
+    await user.save();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(401).json({ success: false, message: '用户名或密码错误' });
+    }
+
+    const isMatch = bcrypt.compareSync(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: '用户名或密码错误' });
+    }
+
+    req.session.userId = user._id;
+    res.json({ success: true, user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.post('/api/posts', async (req, res) => {
+  const { content, media } = req.body;
+
+  try {
+    const post = new Post({
+      userId: req.session.userId,
+      content,
+      media: media || []
+    });
+
+    await post.save();
+    res.json({ success: true, post });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.get('/api/posts', async (req, res) => {
+  try {
+    const posts = await Post.find()
+      .populate('userId', 'username')
+      .sort({ date: -1 })
+      .limit(10);
+
+    res.json({ success: true, posts });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.delete('/api/posts/:id', async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) {
+      return res.status(404).json({ success: false, message: '帖子未找到' });
+    }
+
+    await post.deleteOne();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.post('/api/encrypt', (req, res) => {
+  const { message, key } = req.body;
+  const encrypted = crypto.AES.encrypt(message, key).toString();
+  res.json({ success: true, encrypted });
+});
+
+app.listen(3000, () => {
+  console.log('Server is running on port 3000');
+});
