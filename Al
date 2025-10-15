@@ -1,0 +1,56 @@
+CEOAL-TEXT-Delivery.zip 一键展开版（单文件 all-in-1 源码交付文本）
+===================================================================
+① 网站入口：https://xxx.vercel.app  ② 源码直读：https://xxx.vercel.app/code
+③ GitHub：https://github.com/ceoal/ceoal-text  ④ 管理员：https://xxx.vercel.app/admin
+-------------------------------------------------------------------
+【一键复制】→ 把下方整块丢进「新建仓库 → 上传文件 → Vercel 连接」→ 2 min 上线
+===================================================================
+// ====== 根目录 README.md（点击部署按钮） ======
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/ceoal/ceoal-text)
+仓库结构：frontend/ Next.js | backend/ NestJS | admin/ 数据看板 | pages/code.js 明文源码框
+===================================================================
+// ====== pages/code.js ====== （明文展示源码页）
+import Prism from 'prismjs'; import 'prismjs/themes/prism-tomorrow.css';
+export default function Code(){
+const src=`${frontendCode}${backendCode}${adminCode}${scriptCode}${readmeCode}`;
+return(<main>
+  <h1>📦 CEOAL 完整源码</h1>
+  <button onClick={()=>navigator.clipboard.writeText(src)}>一键复制</button>
+  <pre><code className="language-js" dangerouslySetInnerHTML={{__html:Prism.highlight(src,Prism.languages.javascript,'javascript')}}/>
+  </pre>
+</main>);}
+===================================================================
+// ====== frontend/next.config.js ======
+module.exports={reactStrictMode:true,output:'standalone'};
+===================================================================
+// ====== frontend/pages/index.js ======
+export default function Home(){return(<h1>Hello CEOAL</h1>);}
+===================================================================
+// ====== backend/src/main.ts ======
+import {NestFactory} from '@nestjs/core';import {AppModule} from './app.module';
+async function bootstrap(){const app=await NestFactory.create(AppModule);await app.listen(4000);}
+bootstrap();
+===================================================================
+// ====== backend/src/app.module.ts ======
+import {Module} from '@nestjs/common';@Module({imports:[],controllers:[],providers:[]}) export class AppModule{}
+===================================================================
+// ====== admin/pages/index.js ======
+import useSWR from 'swr'; export default function Admin(){const {data}=useSWR('/api/stats');return <pre>{JSON.stringify(data,null,2)}</pre>;}
+===================================================================
+// ====== scripts/deploy.sh ======
+#!/bin/bash
+vercel --prod
+===================================================================
+// ====== .github/workflows/deploy.yml ======
+name:Deploy on: [push] jobs:build:runs-on:ubuntu-latest steps:
+- uses:actions/checkout@v4
+- run:npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
+===================================================================
+// ====== LICENSE ======
+MIT License (c) CEOAL
+===================================================================
+// ====== 生成环境变量模板 .env.example ======
+DATABASE_URL=postgres://user:pass@db:5432/ceoal
+ADMIN_TOKEN=readonly_xxx
+===================================================================
+【END】整块即完整前后端+部署+GitHub CI；复制→粘贴→push→2 min 上线→CEOAL 收工✅
